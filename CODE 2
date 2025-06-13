@@ -1,0 +1,108 @@
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <thread>
+#include <mutex>
+using namespace std;
+
+// Mutex to avoid printing overlap from threads
+mutex printMutex;
+
+// RLE compression function
+string rleCompress(const string& input) {
+    string result = "";
+    int count = 1;
+
+    for (size_t i = 1; i <= input.length(); ++i) {
+        if (input[i] == input[i - 1]) {
+            count++;
+        } else {
+            result += to_string(count) + input[i - 1];
+            count = 1;
+        }
+    }
+
+    return result;
+}
+
+// RLE decompression function
+string rleDecompress(const string& compressed) {
+    string result = "";
+    string countStr = "";
+
+    for (char ch : compressed) {
+        if (isdigit(ch)) {
+            countStr += ch;
+        } else {
+            int count = stoi(countStr);
+            result += string(count, ch);
+            countStr = "";
+        }
+    }
+
+    return result;
+}
+
+// Thread function for compression
+void compressFile(const string& inputFilename, const string& outputFilename) {
+    ifstream inputFile(inputFilename);
+    if (!inputFile) {
+        lock_guard<mutex> lock(printMutex);
+        cout << "Failed to open input file!" << endl;
+        return;
+    }
+
+    string content((istreambuf_iterator<char>(inputFile)), istreambuf_iterator<char>());
+    inputFile.close();
+
+    string compressed = rleCompress(content);
+
+    ofstream outFile(outputFilename);
+    outFile << compressed;
+    outFile.close();
+
+    lock_guard<mutex> lock(printMutex);
+    cout << "Compression complete. Output saved to: " << outputFilename << endl;
+}
+
+// Thread function for decompression
+void decompressFile(const string& inputFilename, const string& outputFilename) {
+    ifstream inputFile(inputFilename);
+    if (!inputFile) {
+        lock_guard<mutex> lock(printMutex);
+        cout << "Failed to open compressed file!" << endl;
+        return;
+    }
+
+    string content((istreambuf_iterator<char>(inputFile)), istreambuf_iterator<char>());
+    inputFile.close();
+
+    string decompressed = rleDecompress(content);
+
+    ofstream outFile(outputFilename);
+    outFile << decompressed;
+    outFile.close();
+
+    lock_guard<mutex> lock(printMutex);
+    cout << "Decompression complete. Output saved to: " << outputFilename << endl;
+}
+
+int main() {
+    string inputFilename;
+    cout << "Enter the name of the file to compress: ";
+    cin >> inputFilename;
+
+    string compressedFile = "compressed_output.txt";
+    string decompressedFile = "decompressed_output.txt";
+
+    // Start threads
+    thread t1(compressFile, inputFilename, compressedFile);
+    thread t2(decompressFile, compressedFile, decompressedFile);
+
+    // Wait for both threads to complete
+    t1.join();
+    t2.join();
+
+    cout << "All tasks completed!" << endl;
+    return 0;
+}
